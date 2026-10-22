@@ -175,14 +175,14 @@ public sealed class ApplyPipeline
 		writes.Add(new PendingWrite(path, updatedText, encoding));
 	}
 
-	private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
-	/// <summary>Reads a file as <see cref="File.ReadAllTextAsync(string, CancellationToken)"/> does, also returning
-	/// the encoding its BOM declares (UTF-8 without a BOM when it has none), so the rewrite keeps the preamble.</summary>
+	/// <summary>Reads a file with the encoding its BOM declares, also returning that encoding so the rewrite keeps
+	/// the preamble. Invalid bytes decode leniently, as <see cref="File.ReadAllTextAsync(string, CancellationToken)"/>
+	/// does, so a file Roslyn loaded with another code page fails the stale check instead of throwing.</summary>
 	private static async Task<(string Text, Encoding Encoding)> ReadWithEncodingAsync(string path, CancellationToken cancellationToken)
 	{
-		using var reader = new StreamReader(path, Utf8WithoutBom, detectEncodingFromByteOrderMarks: true);
-		string text = await reader.ReadToEndAsync(cancellationToken);
-		return (text, reader.CurrentEncoding);
+		byte[] bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+		Encoding encoding = FileEncoding.Detect(bytes);
+		int preambleLength = encoding.Preamble.Length;
+		return (encoding.GetString(bytes, preambleLength, bytes.Length - preambleLength), encoding);
 	}
 }
