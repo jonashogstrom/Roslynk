@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Morris.Roslynk.Infrastructure.Lifecycle;
@@ -166,11 +167,22 @@ public sealed class ApplyPipeline
 			return;
 
 		string loadedText = (await currentDocument.GetTextAsync(cancellationToken)).ToString();
-		string diskText = await File.ReadAllTextAsync(path, cancellationToken);
+		(string diskText, Encoding encoding) = await ReadWithEncodingAsync(path, cancellationToken);
 		if (!string.Equals(FileHash.Of(loadedText), FileHash.Of(diskText), StringComparison.Ordinal))
 			throw new StaleWriteException(path);
 
 		string updatedText = (await updatedDocument.GetTextAsync(cancellationToken)).ToString();
-		writes.Add(new PendingWrite(path, updatedText));
+		writes.Add(new PendingWrite(path, updatedText, encoding));
+	}
+
+	private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+	/// <summary>Reads a file as <see cref="File.ReadAllTextAsync(string, CancellationToken)"/> does, also returning
+	/// the encoding its BOM declares (UTF-8 without a BOM when it has none), so the rewrite keeps the preamble.</summary>
+	private static async Task<(string Text, Encoding Encoding)> ReadWithEncodingAsync(string path, CancellationToken cancellationToken)
+	{
+		using var reader = new StreamReader(path, Utf8WithoutBom, detectEncodingFromByteOrderMarks: true);
+		string text = await reader.ReadToEndAsync(cancellationToken);
+		return (text, reader.CurrentEncoding);
 	}
 }

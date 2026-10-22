@@ -84,7 +84,7 @@ Semantic edits normally compute an immutable updated solution and call `ApplyPip
 
 Be precise about the guarantee: individual replacements are atomic, and the code implements rollback across a batch; this is not a filesystem transaction visible atomically to external readers or crash recovery. Staging happens before the commit try/finally, so a staging failure/cancellation can leave temp files. Rollback can itself fail, and there is no cross-process lock between disk validation and replacement. Do not strengthen these claims in tool documentation without changing implementation and testing failure cases.
 
-Encoding is path-specific: `AtomicFileWriter` accepts an explicit encoding and defaults to UTF-8 without BOM. `ApplyPipeline` currently creates `PendingWrite` without carrying the document encoding; `ApplyPatchTool` explicitly preserves recognized UTF-8/UTF-16 BOM encodings. Do not assume all write tools preserve encoding identically.
+Encoding is path-specific: `AtomicFileWriter` accepts an explicit encoding and defaults to UTF-8 without BOM. `ApplyPipeline` re-reads each file for its stale check and passes the encoding its BOM declares (UTF-8 without BOM when it has none) to `PendingWrite`; `ApplyPatchTool` separately preserves recognized UTF-8/UTF-16 BOM encodings and decodes BOM-less files as strict UTF-8. Do not assume all write tools preserve encoding identically.
 
 ### Patch-specific path
 
